@@ -4,6 +4,7 @@ from pathlib import Path
 
 movieDict = {}
 userDict = {}
+movieScores = {}
 movieIdToTitle = {}
 
 def initialize():
@@ -58,50 +59,81 @@ def initialize():
         with open(USER_FILE, "w") as file:
             dump(userDict, file, ensure_ascii=False)
 
-def findRecForUser(userId, n = 10):
+def calculateFinalScores(n):
+    global movieScores
+    totalScoreRanking = sorted(movieScores, key=getTotalScore)
+    for i in range(len(totalScoreRanking)):
+        movieScores[totalScoreRanking[i]]["final_score"] = i
+    averageScoreRanking = sorted(movieScores, key=getAverageScore)
+    for i in range(len(averageScoreRanking)):
+        movieScores[averageScoreRanking[i]]["final_score"] += i * ((len(totalScoreRanking) - movieScores[averageScoreRanking[i]]["final_score"]) / len(totalScoreRanking)) * (1 + (1 / len(totalScoreRanking)))
+    return sorted(movieScores, key=getFinalScore, reverse=True)[:n]
+
+def findRecForUser(userId, n = 30):
     userFilms = userDict[userId]
     return findRecFromMovies(userFilms, n)
 
-def findRecFromMovies(userFilms, n = 10):
-    movieScores = {}
+def getFinalScore(movie):
+    return movieScores[movie]["final_score"]
+
+def getTotalScore(movie):
+    return movieScores[movie]["total"]
+
+def getAverageScore(movie):
+    return movieScores[movie]["score"]
+
+def findRecFromMovies(userFilms, n = 30):
+    global movieScores
     for key in userFilms:
         if userFilms[key] == 1:
-            movieScores = updateMovieScores(movieScores, key)
+            updateMovieScores(movieScores, key)
     for key in userFilms:
         if key in movieScores:
             del movieScores[key]
-    return sorted(movieScores, key=movieScores.get)[:n]
+    createFinalScores(movieScores)
+    return calculateFinalScores(n)
+
+def createFinalScores(movieScores):
+    for key in movieScores:
+        currentMovie = movieScores[key]
+        currentMovie["score"] = currentMovie["total"] / currentMovie["people"]
 
 def updateMovieScores(movieScores, movieId):
     filmUsers = movieDict[movieId]
     for key in filmUsers:
         if filmUsers[key] == 1:
-            movieScores = addUserScores(movieScores, key)
-    return movieScores
+            addUserScores(movieScores, key)
 
 def addUserScores(movieScores, userId):
     for key in userDict[userId]:
         if key in movieScores:
-            movieScores[key] += userDict[userId][key]
+            movieScores[key]["total"] += userDict[userId][key]
+            movieScores[key]["people"] += 1
         else:
-            movieScores[key] = userDict[userId][key]
-    return movieScores
+            movieScores[key] = {}
+            movieScores[key]["total"] = userDict[userId][key]
+            movieScores[key]["people"] = 1
 
 def movieFromId(movieId):
     return movieIdToTitle[movieId]
 
 def main():
     initialize()
-    # kevinDict = {"60126": 1, "110102" : 1, "117448" : 1, "8961" : 1, "106696" : 1, "899" : 1, "4963" : 1, "2501" : 1, "912" : 1}
-    # kevRecs = findRecFromMovies(kevinDict)
+    kevinDict = {"60126": 1, "110102" : 1, "117448" : 1, "8961" : 1, "106696" : 1, "899" : 1, "4963" : 1, "2501" : 1, "912" : 1}
+    kevRecs = findRecFromMovies(kevinDict)
     # stanDict = {"110102": 1, "88140": 1, "86332": 1, "59315": 1, "89745": 1}
     # stanRecs = findRecFromMovies(stanDict)
-    user1Recs = findRecForUser("1")
-    for key in userDict["1"]:
-        print(movieFromId(key))
-    print("================ \n \n ================")
-    for filmId in user1Recs:
+    # user1Recs = findRecForUser("1")
+    # for key in userDict["1"]:
+    #     print(movieFromId(key) + ":" + str(userDict["1"][key]))
+    print("================\n\n================")
+    for filmId in kevRecs:
         print(movieFromId(filmId))
+        # print(movieScores[filmId]["final_score"])
+        # print(movieScores[filmId]["total"])
+        # print(movieScores[filmId]["people"])
+        # print(movieScores[filmId]["score"])
+        # print()
 
 if __name__== '__main__':
     main()
