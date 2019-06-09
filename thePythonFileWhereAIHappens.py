@@ -7,6 +7,35 @@ userDict = {}
 movieScores = {}
 movieIdToTitle = {}
 
+userTestDict = {}
+
+def initializeTestData():
+    USERTEST_FILE = "data/userTest_dict.txt"
+
+    global userTestDict = {}
+
+    if Path(USERTEST_FILE).is_file():
+        userTestDict = load(open(USERTEST_FILE))
+    else:
+        data = read_csv("data/ml-20m/ratings.csv")
+        for i in range(data.count()["userId"]):
+            userId = str(data["userId"][i])
+            movieId = str(data["movieId"][i])
+            rating = float(data["rating"][i])
+            if userId > 6408:
+                if userId not in userTestDict:
+                    # userNode = UserNode(userId)
+                    userTestDict[userId] = {}
+                if rating <= 2:
+                    rating = -1
+                elif rating >= 4:
+                    rating = 1
+                else:
+                    rating = 0
+                userTestDict[userId][movieId] = rating
+                if userId in userDict:
+                    del userDict[userId]
+
 def initialize():
     MOVIE_FILE = "data/movie_dict.txt"
     USER_FILE = "data/user_dict.txt"
@@ -119,6 +148,7 @@ def movieFromId(movieId):
 
 def main():
     initialize()
+    initializeTestData()
     kevinDict = {"60126": 1, "110102" : 1, "117448" : 1, "8961" : 1, "106696" : 1, "899" : 1, "4963" : 1, "2501" : 1, "912" : 1}
     kevRecs = findRecFromMovies(kevinDict)
     # stanDict = {"110102": 1, "88140": 1, "86332": 1, "59315": 1, "89745": 1}
