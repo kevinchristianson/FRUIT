@@ -4,16 +4,29 @@ from pathlib import Path
 from math import sqrt
 from heapq import heappush, heappushpop
 
+# STATIC VARIABLES
+DATA_FILE = 'data/ml-20m/ratings.csv'
+SIMILARITY_FILE = 'data/similarities_temp.pkl'
+TEST_FILE = 'data/test.csv'
+USER_FILE = 'data/users_temp.pkl'
+FILM_FILE = 'data/films_temp.pkl'
+NUM_SIMILARITIES = 200 # for each film, track the top 200 most similar
+
 class User:
 
     def __init__(self):
         self.num_ratings = 0
+        self.ratings = {}
         self.total_rating_value = 0
 
 
-    def add_rating(self, rating):
-        self.total_rating_value += rating[1]
+    def add_rating(self, film, score):
+        self.ratings[film] = score
+        self.total_rating_value += score
         self.num_ratings += 1
+
+    def get_ratings(self):
+        return self.ratings
 
     def get_avg_rating(self):
         return self.total_rating_value / self.num_ratings
@@ -21,14 +34,14 @@ class User:
 users = {}
 films = {}
 similarities = {}
-def initialize():
-    DATA_FILE = 'data/ml-20m/ratings.csv'
-    SIMILARITY_FILE = 'data/similarities_temp.pkl'
-    TEST_FILE = 'data/test_temp.csv'
-    USER_FILE = 'data/users_temp.pkl'
-    FILM_FILE = 'data/films_temp.pkl'
-    NUM_SIMILARITIES = 200 # for each film, track the top 200 most similar
 
+# initializes above dictionaries based on data
+def initialize():
+    global users
+    global films
+    global similarities
+
+    # load data from binary file if computed earlier
     if Path(USER_FILE).is_file() and Path(FILM_FILE).is_file():
         with open(USER_FILE, 'rb') as file:
             users = load(file)
@@ -37,7 +50,7 @@ def initialize():
     else:
         data = read_csv(DATA_FILE)
         n = len(data)
-        n = n - int(n * .90) # save last 10% of file for testing
+        n = n - int(n * .10) # save last 10% of file for testing
         data[n:].to_csv(TEST_FILE, encoding='utf-8', index=False)
         data = data[:n]
         n = len(data)
@@ -45,7 +58,7 @@ def initialize():
             user_id, movie_id, rating = row[:3]
             if user_id not in users:
                 users[user_id] = User()
-            users[user_id].add_rating( (movie_id, rating) )
+            users[user_id].add_rating(movie_id, rating)
             if movie_id not in films:
                 films[movie_id] = {}
             films[movie_id][users[user_id]] = rating
@@ -53,6 +66,7 @@ def initialize():
             print("\rReading Data: [%-20s] %d%%" % ('=' * int(20 * index), 100 * index), end = '')
         print("\rReading Data: [%-20s] %d%%" % ('=' * 20, 100))
 
+        # save to binary files so no need to recompute
         with open(USER_FILE, 'wb') as file:
             dump(users, file, 2)
         with open(FILM_FILE, 'wb') as file:
@@ -113,8 +127,43 @@ def initialize():
         with open(SIMILARITY_FILE, 'wb') as file:
             dump(similarities, file, 2)
 
+# returns top num_results movies based on user_id
+def recommend(user_id, num_results = 25):
+    # TODO: ensure unique results. replace existing (or additive?) if higher, else pass
+    if user_id not in users:
+        return []
+    reviewed = users[user_id].get_ratings()
+    results = []
+    for movie_id in reviewed:
+        for similarity, potential_recommendation in similarities[movie_id]:
+            score = 0 # score a movie by sum of user's ratings for movies similar to it
+            for similar_movie in similarities[potential_recommendation]:
+                score += reviewed[similar_movie] if similar_movie in reviewed else 0
+            score = -1 * score # use to make min heap behave like max heap
+            if len(results) < num_results:
+                heappush(results, (score, potential_recommendation))
+            else:
+                heappushpop(results, (score, potential_recommendation))
+    return results
+
+# computes the MAE test by comparing expected values to actual
+def test():
+    data = read_csv(TEST_FILE)
+    n = len(data)
+    numerator = 0
+    for index, row in data.iterrows():
+        user_id, movie_id = [int(x) for x in row[:2]]
+        rating = row[2]
+        for score, id in recommend(user_id):
+            if movie_id == id:
+                numerator += abs(rating - score)
+                break
+    return numerator / n
+
+
 def main():
     initialize()
+    print('MAE =', test())
 
 if __name__ == '__main__':
     main()
