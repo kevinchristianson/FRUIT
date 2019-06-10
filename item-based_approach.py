@@ -8,8 +8,8 @@ from heapq import heappush, heappushpop
 DATA_FILE = 'data/ml-20m/ratings.csv'
 SIMILARITY_FILE = 'data/similarities_temp.pkl'
 TEST_FILE = 'data/test.csv'
-USER_FILE = 'data/users_temp.pkl'
-FILM_FILE = 'data/films_temp.pkl'
+USER_FILE = 'data/users_temp1.pkl'
+FILM_FILE = 'data/films_temp1.pkl'
 NUM_SIMILARITIES = 200 # for each film, track the top 200 most similar
 
 class User:
@@ -50,7 +50,7 @@ def initialize():
     else:
         data = read_csv(DATA_FILE)
         n = len(data)
-        n = n - int(n * .10) # save last 10% of file for testing
+        n = n - int(n * .99) # save last 10% of file for testing
         data[n:].to_csv(TEST_FILE, encoding='utf-8', index=False)
         data = data[:n]
         n = len(data)
@@ -135,11 +135,11 @@ def recommend(user_id, num_results = 25):
     reviewed = users[user_id].get_ratings()
     results = []
     for movie_id in reviewed:
-        for similarity, potential_recommendation in similarities[movie_id]:
-            score = 0 # score a movie by sum of user's ratings for movies similar to it
-            for similar_movie in similarities[potential_recommendation]:
-                score += reviewed[similar_movie] if similar_movie in reviewed else 0
-            score = -1 * score # use to make min heap behave like max heap
+        for sim1, potential_recommendation in similarities[movie_id]:
+            numerator = 0 # score a movie by sum of user's ratings for movies similar to it
+            for sim2, similar_movie in similarities[potential_recommendation]:
+                numerator += sim2 * reviewed[similar_movie] if similar_movie in reviewed else 0
+            numerator = -1 * score # use to make min heap behave like max heap
             if len(results) < num_results:
                 heappush(results, (score, potential_recommendation))
             else:
