@@ -6,10 +6,10 @@ from heapq import heappush, heappushpop
 
 # STATIC VARIABLES
 DATA_FILE = 'data/ml-20m/ratings.csv'
-SIMILARITY_FILE = 'data/similarities_temp.pkl'
+SIMILARITY_FILE = 'data/similarities.pkl'
 TEST_FILE = 'data/test.csv'
-USER_FILE = 'data/users_temp1.pkl'
-FILM_FILE = 'data/films_temp1.pkl'
+USER_FILE = 'data/users.pkl'
+FILM_FILE = 'data/films.pkl'
 NUM_SIMILARITIES = 200 # for each film, track the top 200 most similar
 
 class User:
@@ -50,7 +50,7 @@ def initialize():
     else:
         data = read_csv(DATA_FILE)
         n = len(data)
-        n = n - int(n * .99) # save last 10% of file for testing
+        n = n - int(n * .10) # save last 10% of file for testing
         data[n:].to_csv(TEST_FILE, encoding='utf-8', index=False)
         data = data[:n]
         n = len(data)
@@ -137,19 +137,33 @@ def recommend(user_id, num_results = 25):
     for movie_id in reviewed:
         for sim1, potential_recommendation in similarities[movie_id]:
             numerator = 0 # score a movie by sum of user's ratings for movies similar to it
+            denom = 0
             for sim2, similar_movie in similarities[potential_recommendation]:
                 numerator += sim2 * reviewed[similar_movie] if similar_movie in reviewed else 0
-            numerator = -1 * score # use to make min heap behave like max heap
+                denom += sim2
+            # make numerator negative to make min heap behave like max heap
             if len(results) < num_results:
-                heappush(results, (score, potential_recommendation))
+                heappush(results, (-1 * (numerator / denom), potential_recommendation))
             else:
-                heappushpop(results, (score, potential_recommendation))
+                heappushpop(results, (-1 * (numerator / denom), potential_recommendation))
     return results
+
+def custom_recommend(user_id, num_results = 25):
+    if user_id not in users:
+        return []
+    reviewed = users[user_id].get_ratings()
+    results = {}
+    for movie_id in reviewed:
+        for sim, id in similarities[movie_id]:
+            if id in results:
+                results[id] += sim
+            else:
+                results[id] = sim
+    return sorted(results.items(), key=lambda x: x[1])[:num_results]
 
 # computes the MAE test by comparing expected values to actual
 def test():
     data = read_csv(TEST_FILE)
-    n = len(data)
     numerator = 0
     for index, row in data.iterrows():
         user_id, movie_id = [int(x) for x in row[:2]]
@@ -158,12 +172,35 @@ def test():
             if movie_id == id:
                 numerator += abs(rating - score)
                 break
-    return numerator / n
+    return numerator / len(data)
+
+def custom_test():
+    data = read_csv(TEST_FILE)
+    # numerator = 0 #number of recommendations that are bad (movie not returned when should, or movie returned when shouldn't)
+    false_pos = 0
+    false_neg = 0
+    seen = {}
+    for index, row in data.iterrows():
+        user_id, movie_id = [int(x) for x in row[:2]]
+        rating = row[2]
+        if movie_id in films:
+            if user_id not in seen:
+                seen[user_id] = custom_recommend(user_id, None)
+            if movie_id in seen[user_id]:
+                if rating < 2.5:
+                    # numerator += 1
+                    false_pos += 1
+            elif rating > 2.5:
+                    # numerator += 1
+                    false_neg += 1
+    print('false_pos:', false_pos, 'false_neg:', false_neg)
+    return (false_pos + false_neg) / len(data)
+
 
 
 def main():
     initialize()
-    print('MAE =', test())
+    print('MAE =', custom_test())
 
 if __name__ == '__main__':
     main()
